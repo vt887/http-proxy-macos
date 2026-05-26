@@ -44,7 +44,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version-file: daemon/go.mod
+          go-version: "1.26.x"
           cache-dependency-path: |
             daemon/go.sum
             helper/go.sum
@@ -54,8 +54,15 @@ jobs:
         with:
           languages: go
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v4
+      - name: Build Go modules for CodeQL
+        run: |
+          timeout 20m bash -lc '
+            set -euo pipefail
+            cd daemon
+            go build ./...
+            cd ../helper
+            go build ./...
+          '
 
       - name: Analyze
         uses: github/codeql-action/analyze@v4
