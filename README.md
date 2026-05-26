@@ -55,4 +55,6 @@ curl -s -X PATCH http://127.0.0.1:18080/api/settings -d '{"ui.theme":"dark"}'
 1. Swift app now includes `DaemonAPIClient` (loopback HTTP calls to daemon endpoints).
 2. Dashboard and Services pages now use explicit load states (`idle/loading/loaded/failed`) with retry actions.
 3. Daemon persists and serves service statuses from SQLite (`service_status` table) and seeds defaults at startup.
-4. Swift models now include a live-activity event contract for the current `/api/live-activity` response shape.
+4. Settings screen now loads and saves `ui.theme` through daemon API.
+5. Live Activity page now renders daemon events from `/api/live-activity`.
+6. Swift models include a live-activity event contract for `/api/live-activity`.
