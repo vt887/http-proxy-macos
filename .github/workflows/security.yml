@@ -38,6 +38,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: daemon/go.mod
+          cache-dependency-path: |
+            daemon/go.sum
+            helper/go.sum
+
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
