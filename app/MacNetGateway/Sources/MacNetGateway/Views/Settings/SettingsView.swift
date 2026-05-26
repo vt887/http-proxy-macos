@@ -11,10 +11,11 @@ struct SettingsView: View {
                         Text(option.title).tag(option)
                     }
                 }
+                .disabled(viewModel.loadState != .loaded)
                 Button("Save Settings") {
                     Task { await viewModel.save() }
                 }
-                .disabled(viewModel.saveState == .loading)
+                .disabled(viewModel.loadState != .loaded || viewModel.saveState == .loading)
             }
             Section("Security") {
                 Text("Daemon API is intended for 127.0.0.1 only.")
