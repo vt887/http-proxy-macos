@@ -1,13 +1,106 @@
 import Foundation
 
-@MainActor
 protocol APIClient {
-    func fetchDashboard() async throws -> DashboardMetrics
-    func fetchServices() async throws -> [ServiceStatus]
+    @MainActor func fetchDashboard() async throws -> DashboardMetrics
+    @MainActor func fetchServices() async throws -> [ServiceStatus]
+    @MainActor func fetchLiveActivity() async throws -> [LiveActivityEvent]
+    @MainActor func fetchSettings() async throws -> [String: String]
+    @MainActor func patchSettings(_ payload: [String: String]) async throws
 }
 
 enum APIClientError: Error {
-    case invalidResponse
+    case invalidURL
+    case invalidResponse(statusCode: Int)
+    case decodeFailed
+    case transport(Error)
+}
+
+extension APIClientError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .invalidURL:
+            "Invalid daemon API URL."
+        case .invalidResponse(let statusCode):
+            "Daemon API returned status \(statusCode)."
+        case .decodeFailed:
+            "Failed to decode daemon response."
+        case .transport(let error):
+            "Daemon API request failed: \(error.localizedDescription)"
+        }
+    }
+}
+
+struct DaemonAPIClient: APIClient {
+    private let baseURL: URL
+    private let session: URLSession
+    private let decoder: JSONDecoder
+
+    init(
+        baseURL: URL = URL(string: "http://127.0.0.1:18080")!,
+        session: URLSession = .shared
+    ) {
+        self.baseURL = baseURL
+        self.session = session
+        self.decoder = JSONDecoder()
+        self.decoder.keyDecodingStrategy = .convertFromSnakeCase
+    }
+
+    func fetchDashboard() async throws -> DashboardMetrics {
+        try await request(path: "/api/dashboard", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func fetchServices() async throws -> [ServiceStatus] {
+        try await request(path: "/api/services", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func fetchLiveActivity() async throws -> [LiveActivityEvent] {
+        try await request(path: "/api/live-activity", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func fetchSettings() async throws -> [String: String] {
+        try await request(path: "/api/settings", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func patchSettings(_ payload: [String: String]) async throws {
+        let _: [String: String] = try await request(path: "/api/settings", method: "PATCH", body: payload)
+    }
+
+    private func request<T: Decodable, Body: Encodable>(
+        path: String,
+        method: String,
+        body: Body?
+    ) async throws -> T {
+        guard let url = URL(string: path, relativeTo: baseURL) else {
+            throw APIClientError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = method
+        request.timeoutInterval = 5
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let body {
+            request.httpBody = try JSONEncoder().encode(body)
+        }
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw APIClientError.invalidResponse(statusCode: -1)
+            }
+            guard (200...299).contains(http.statusCode) else {
+                throw APIClientError.invalidResponse(statusCode: http.statusCode)
+            }
+            do {
+                return try decoder.decode(T.self, from: data)
+            } catch {
+                throw APIClientError.decodeFailed
+            }
+        } catch let apiError as APIClientError {
+            throw apiError
+        } catch {
+            throw APIClientError.transport(error)
+        }
+    }
 }
 
 struct MockAPIClient: APIClient {
@@ -29,5 +122,19 @@ struct MockAPIClient: APIClient {
             ServiceStatus(name: "squid", status: "mock", message: "Integration not enabled in PR-1"),
             ServiceStatus(name: "dns", status: "mock", message: "Integration not enabled in PR-1"),
         ]
+    }
+
+    func fetchSettings() async throws -> [String: String] {
+        ["ui.theme": "system"]
+    }
+
+    func fetchLiveActivity() async throws -> [LiveActivityEvent] {
+        [
+            LiveActivityEvent(time: "2026-01-01T12:00:00Z", type: "SERVICE_STARTED", target: "macnet-gatewayd", action: "allowed"),
+        ]
+    }
+
+    func patchSettings(_ payload: [String: String]) async throws {
+        _ = payload
     }
 }

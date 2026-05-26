@@ -27,6 +27,8 @@
 
 ## PR-2 focus
 
-- Replace Swift mock client with real daemon API client.
-- Add loading/error states across pages.
-- Persist and expose service statuses and settings via daemon as first-class models.
+Implemented in PR-2:
+
+- Swift app uses daemon HTTP client (`http://127.0.0.1:18080`) instead of mock-only wiring.
+- Dashboard and Services use explicit `LoadState` with retry.
+- Daemon persists service statuses in SQLite and serves `/api/services` from database records.

@@ -3,20 +3,21 @@ import Foundation
 @MainActor
 final class ServicesViewModel: ObservableObject {
     @Published private(set) var services: [ServiceStatus] = []
-    @Published private(set) var errorMessage: String?
+    @Published private(set) var loadState: LoadState = .idle
 
     private let apiClient: APIClient
 
-    init(apiClient: APIClient = MockAPIClient()) {
+    init(apiClient: APIClient = DaemonAPIClient()) {
         self.apiClient = apiClient
     }
 
     func load() async {
+        loadState = .loading
         do {
             services = try await apiClient.fetchServices()
-            errorMessage = nil
+            loadState = .loaded
         } catch {
-            errorMessage = "Failed to load services."
+            loadState = .failed(error.localizedDescription)
         }
     }
 }

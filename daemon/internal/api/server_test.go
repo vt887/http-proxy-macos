@@ -25,7 +25,17 @@ func testServer(t *testing.T) *Server {
 	if err := db.Initialize(context.Background(), store); err != nil {
 		t.Fatal(err)
 	}
-	return NewServer(store, events.NewMockBus(), services.NewMockRegistry())
+	for _, service := range services.NewMockRegistry() {
+		err := db.UpsertServiceStatus(context.Background(), store, db.ServiceStatusRecord{
+			Name:    service.Name,
+			Status:  service.Status,
+			Message: service.Message,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return NewServer(store, events.NewMockBus())
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -62,5 +72,23 @@ func TestPatchAndGetSettings(t *testing.T) {
 	}
 	if payload["ui.theme"] != "dark" {
 		t.Fatalf("expected dark theme, got %q", payload["ui.theme"])
+	}
+}
+
+func TestServicesEndpoint(t *testing.T) {
+	server := testServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/services", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", rec.Code)
+	}
+
+	var payload []db.ServiceStatusRecord
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload) == 0 {
+		t.Fatal("expected seeded service statuses")
 	}
 }

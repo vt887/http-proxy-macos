@@ -9,20 +9,17 @@ import (
 	"github.com/vt887/macnet-gateway/daemon/internal/db"
 	"github.com/vt887/macnet-gateway/daemon/internal/events"
 	"github.com/vt887/macnet-gateway/daemon/internal/models"
-	"github.com/vt887/macnet-gateway/daemon/internal/services"
 )
 
 type Server struct {
 	db       *sql.DB
 	eventBus events.Bus
-	services []services.ServiceStatus
 }
 
-func NewServer(dbConn *sql.DB, eventBus events.Bus, serviceStatuses []services.ServiceStatus) *Server {
+func NewServer(dbConn *sql.DB, eventBus events.Bus) *Server {
 	return &Server{
 		db:       dbConn,
 		eventBus: eventBus,
-		services: serviceStatuses,
 	}
 }
 
@@ -52,8 +49,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleServices(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, http.StatusOK, s.services)
+func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
+	serviceStatuses, err := db.ListServiceStatuses(r.Context(), s.db)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, serviceStatuses)
 }
 
 func (s *Server) handleLiveActivity(w http.ResponseWriter, _ *http.Request) {

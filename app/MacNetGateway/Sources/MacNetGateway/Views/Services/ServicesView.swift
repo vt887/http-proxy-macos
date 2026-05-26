@@ -8,16 +8,22 @@ struct ServicesView: View {
             Text("Services")
                 .font(.largeTitle)
                 .bold()
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .foregroundStyle(.red)
-            } else if viewModel.services.isEmpty {
+            switch viewModel.loadState {
+            case .idle, .loading:
                 ProgressView("Loading services…")
-            } else {
+            case .loaded:
                 Table(viewModel.services) {
                     TableColumn("Name", value: \.name)
                     TableColumn("Status", value: \.status)
                     TableColumn("Message", value: \.message)
+                }
+            case .failed(let message):
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(message)
+                        .foregroundStyle(.red)
+                    Button("Retry") {
+                        Task { await viewModel.load() }
+                    }
                 }
             }
         }
