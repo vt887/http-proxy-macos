@@ -1,25 +1,29 @@
 package api
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/vt887/macnet-gateway/daemon/internal/db"
 	"github.com/vt887/macnet-gateway/daemon/internal/events"
 	"github.com/vt887/macnet-gateway/daemon/internal/models"
+	"github.com/vt887/macnet-gateway/daemon/internal/services"
+	"github.com/vt887/macnet-gateway/daemon/internal/services/squid"
 )
 
 type Server struct {
 	db       *sql.DB
 	eventBus events.Bus
+	squidSvc services.SquidService
 }
 
-func NewServer(dbConn *sql.DB, eventBus events.Bus) *Server {
+func NewServer(dbConn *sql.DB, eventBus events.Bus, squidSvc services.SquidService) *Server {
 	return &Server{
 		db:       dbConn,
 		eventBus: eventBus,
+		squidSvc: squidSvc,
 	}
 }
 
@@ -31,6 +35,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/live-activity", s.handleLiveActivity)
 	mux.HandleFunc("GET /api/settings", s.handleGetSettings)
 	mux.HandleFunc("PATCH /api/settings", s.handlePatchSettings)
+	mux.HandleFunc("GET /api/proxy/status", s.handleProxyStatus)
+	mux.HandleFunc("GET /api/proxy/settings", s.handleProxySettings)
+	mux.HandleFunc("POST /api/proxy/validate", s.handleProxyValidate)
+	mux.HandleFunc("POST /api/proxy/reload", s.handleProxyReload)
 	return mux
 }
 
@@ -62,8 +70,8 @@ func (s *Server) handleLiveActivity(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, s.eventBus.Recent())
 }
 
-func (s *Server) handleGetSettings(w http.ResponseWriter, _ *http.Request) {
-	value, err := db.GetSetting(context.Background(), s.db, "ui.theme")
+func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
+	value, err := db.GetSetting(r.Context(), s.db, "ui.theme")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -82,12 +90,60 @@ func (s *Server) handlePatchSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, value := range body {
-		if err := db.UpsertSetting(context.Background(), s.db, key, value); err != nil {
+		if err := db.UpsertSetting(r.Context(), s.db, key, value); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func (s *Server) handleProxyStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := s.squidSvc.Status(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleProxySettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.squidSvc.Settings(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	preview, err := s.squidSvc.ConfigPreview(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, models.ProxySettings{
+		ListenAddress:       settings.ListenAddress,
+		CacheDirectory:      settings.CacheDirectory,
+		GeneratedConfigPath: settings.GeneratedConfigPath,
+		ConfigPreview:       preview,
+	})
+}
+
+func (s *Server) handleProxyValidate(w http.ResponseWriter, r *http.Request) {
+	if err := s.squidSvc.ValidateConfig(r.Context()); err != nil {
+		if errors.Is(err, squid.ErrInvalidConfig) {
+			writeJSON(w, http.StatusBadRequest, models.ActionResult{Status: "invalid", Message: err.Error()})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, models.ActionResult{Status: "valid", Message: "Squid config is valid"})
+}
+
+func (s *Server) handleProxyReload(w http.ResponseWriter, r *http.Request) {
+	if err := s.squidSvc.Reload(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, models.ActionResult{Status: "reloaded", Message: "Squid reload request accepted"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

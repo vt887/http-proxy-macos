@@ -19,6 +19,10 @@
 - `GET /api/live-activity`
 - `GET /api/settings`
 - `PATCH /api/settings`
+- `GET /api/proxy/status`
+- `GET /api/proxy/settings`
+- `POST /api/proxy/validate`
+- `POST /api/proxy/reload`
 
 ## Persistence
 
@@ -34,3 +38,11 @@ Implemented in PR-2:
 - Daemon persists service statuses in SQLite and serves `/api/services` from database records.
 - Settings UI reads/writes `ui.theme` through daemon settings API.
 - Live Activity UI reads events from `/api/live-activity`.
+
+## PR-3 focus
+
+Implemented in PR-3:
+
+- Squid mock manager with binary detection and generated config rendering.
+- Proxy settings endpoint returns generated config preview from daemon side.
+- Proxy view in SwiftUI supports status display, config preview, validate, and reload actions.

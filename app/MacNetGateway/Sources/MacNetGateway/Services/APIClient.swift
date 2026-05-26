@@ -4,6 +4,10 @@ protocol APIClient {
     @MainActor func fetchDashboard() async throws -> DashboardMetrics
     @MainActor func fetchServices() async throws -> [ServiceStatus]
     @MainActor func fetchLiveActivity() async throws -> [LiveActivityEvent]
+    @MainActor func fetchProxyStatus() async throws -> ProxyStatus
+    @MainActor func fetchProxySettings() async throws -> ProxySettings
+    @MainActor func validateProxyConfig() async throws -> ProxyActionResult
+    @MainActor func reloadProxyConfig() async throws -> ProxyActionResult
     @MainActor func fetchSettings() async throws -> [String: String]
     @MainActor func patchSettings(_ payload: [String: String]) async throws
 }
@@ -55,6 +59,22 @@ struct DaemonAPIClient: APIClient {
 
     func fetchLiveActivity() async throws -> [LiveActivityEvent] {
         try await request(path: "/api/live-activity", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func fetchProxyStatus() async throws -> ProxyStatus {
+        try await request(path: "/api/proxy/status", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func fetchProxySettings() async throws -> ProxySettings {
+        try await request(path: "/api/proxy/settings", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func validateProxyConfig() async throws -> ProxyActionResult {
+        try await request(path: "/api/proxy/validate", method: "POST", body: Optional<[String: String]>.none)
+    }
+
+    func reloadProxyConfig() async throws -> ProxyActionResult {
+        try await request(path: "/api/proxy/reload", method: "POST", body: Optional<[String: String]>.none)
     }
 
     func fetchSettings() async throws -> [String: String] {
@@ -132,6 +152,27 @@ struct MockAPIClient: APIClient {
         [
             LiveActivityEvent(time: "2026-01-01T12:00:00Z", type: "SERVICE_STARTED", target: "macnet-gatewayd", action: "allowed"),
         ]
+    }
+
+    func fetchProxyStatus() async throws -> ProxyStatus {
+        ProxyStatus(name: "squid", status: "mock", message: "Mock proxy status")
+    }
+
+    func fetchProxySettings() async throws -> ProxySettings {
+        ProxySettings(
+            listenAddress: "127.0.0.1:3128",
+            cacheDirectory: "/Library/Caches/MacNetGateway/squid",
+            generatedConfigPath: "~/.macnet-gateway-dev/generated/squid",
+            configPreview: "http_port 127.0.0.1:3128\ncache_dir ufs /Library/Caches/MacNetGateway/squid 4096 16 256\n"
+        )
+    }
+
+    func validateProxyConfig() async throws -> ProxyActionResult {
+        ProxyActionResult(status: "valid", message: "Mock validation succeeded")
+    }
+
+    func reloadProxyConfig() async throws -> ProxyActionResult {
+        ProxyActionResult(status: "reloaded", message: "Mock reload accepted")
     }
 
     func patchSettings(_ payload: [String: String]) async throws {

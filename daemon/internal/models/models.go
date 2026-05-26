@@ -25,3 +25,15 @@ type Event struct {
 	Target string `json:"target"`
 	Action string `json:"action"`
 }
+
+type ProxySettings struct {
+	ListenAddress       string `json:"listen_address"`
+	CacheDirectory      string `json:"cache_directory"`
+	GeneratedConfigPath string `json:"generated_config_path"`
+	ConfigPreview       string `json:"config_preview"`
+}
+
+type ActionResult struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+}
