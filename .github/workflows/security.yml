@@ -65,6 +65,16 @@ jobs:
         with:
           languages: swift
 
+      - name: Cache SwiftPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            app/MacNetGateway/.build
+            ~/.swiftpm
+          key: ${{ runner.os }}-swiftpm-${{ hashFiles('app/MacNetGateway/Package.swift', 'app/MacNetGateway/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-swiftpm-
+
       - name: Build Swift package
         working-directory: app/MacNetGateway
         run: swift build
