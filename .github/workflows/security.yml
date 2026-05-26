@@ -51,7 +51,7 @@ jobs:
 
   codeql-swift:
     name: CodeQL (Swift)
-    runs-on: macos-latest
+    runs-on: [self-hosted, macOS, ARM64]
     permissions:
       actions: read
       contents: read
