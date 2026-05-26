@@ -107,12 +107,26 @@ func TestProxyEndpoints(t *testing.T) {
 	if statusRec.Code != http.StatusOK {
 		t.Fatalf("unexpected status endpoint code: %d", statusRec.Code)
 	}
+	var statusPayload map[string]string
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &statusPayload); err != nil {
+		t.Fatal(err)
+	}
+	if statusPayload["name"] != "squid" {
+		t.Fatalf("expected squid status payload, got %#v", statusPayload)
+	}
 
 	settingsReq := httptest.NewRequest(http.MethodGet, "/api/proxy/settings", nil)
 	settingsRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(settingsRec, settingsReq)
 	if settingsRec.Code != http.StatusOK {
 		t.Fatalf("unexpected settings endpoint code: %d", settingsRec.Code)
+	}
+	var settingsPayload map[string]string
+	if err := json.Unmarshal(settingsRec.Body.Bytes(), &settingsPayload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(settingsPayload["config_preview"], "http_port 3128") {
+		t.Fatalf("expected http_port in config preview, got %#v", settingsPayload)
 	}
 
 	validateReq := httptest.NewRequest(http.MethodPost, "/api/proxy/validate", nil)
@@ -121,11 +135,25 @@ func TestProxyEndpoints(t *testing.T) {
 	if validateRec.Code != http.StatusOK {
 		t.Fatalf("unexpected validate endpoint code: %d", validateRec.Code)
 	}
+	var validatePayload map[string]string
+	if err := json.Unmarshal(validateRec.Body.Bytes(), &validatePayload); err != nil {
+		t.Fatal(err)
+	}
+	if validatePayload["status"] != "valid" {
+		t.Fatalf("expected valid status, got %#v", validatePayload)
+	}
 
 	reloadReq := httptest.NewRequest(http.MethodPost, "/api/proxy/reload", nil)
 	reloadRec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(reloadRec, reloadReq)
 	if reloadRec.Code != http.StatusOK {
 		t.Fatalf("unexpected reload endpoint code: %d", reloadRec.Code)
+	}
+	var reloadPayload map[string]string
+	if err := json.Unmarshal(reloadRec.Body.Bytes(), &reloadPayload); err != nil {
+		t.Fatal(err)
+	}
+	if reloadPayload["status"] != "reloaded" {
+		t.Fatalf("expected reloaded status, got %#v", reloadPayload)
 	}
 }
