@@ -8,13 +8,17 @@ protocol APIClient {
     @MainActor func fetchProxySettings() async throws -> ProxySettings
     @MainActor func validateProxyConfig() async throws -> ProxyActionResult
     @MainActor func reloadProxyConfig() async throws -> ProxyActionResult
+    @MainActor func fetchDNSStatus() async throws -> DNSStatus
+    @MainActor func fetchDNSSettings() async throws -> DNSSettings
+    @MainActor func validateDNSConfig() async throws -> DNSActionResult
+    @MainActor func reloadDNSConfig() async throws -> DNSActionResult
     @MainActor func fetchSettings() async throws -> [String: String]
     @MainActor func patchSettings(_ payload: [String: String]) async throws
 }
 
 enum APIClientError: Error {
     case invalidURL
-    case invalidResponse(statusCode: Int)
+    case invalidResponse(statusCode: Int, message: String?)
     case decodeFailed
     case transport(Error)
 }
@@ -24,8 +28,12 @@ extension APIClientError: LocalizedError {
         switch self {
         case .invalidURL:
             "Invalid daemon API URL."
-        case .invalidResponse(let statusCode):
-            "Daemon API returned status \(statusCode)."
+        case .invalidResponse(let statusCode, let message):
+            if let message, !message.isEmpty {
+                "Daemon API returned status \(statusCode): \(message)"
+            } else {
+                "Daemon API returned status \(statusCode)."
+            }
         case .decodeFailed:
             "Failed to decode daemon response."
         case .transport(let error):
@@ -77,6 +85,22 @@ struct DaemonAPIClient: APIClient {
         try await request(path: "/api/proxy/reload", method: "POST", body: Optional<[String: String]>.none)
     }
 
+    func fetchDNSStatus() async throws -> DNSStatus {
+        try await request(path: "/api/dns/status", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func fetchDNSSettings() async throws -> DNSSettings {
+        try await request(path: "/api/dns/settings", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func validateDNSConfig() async throws -> DNSActionResult {
+        try await request(path: "/api/dns/validate", method: "POST", body: Optional<[String: String]>.none)
+    }
+
+    func reloadDNSConfig() async throws -> DNSActionResult {
+        try await request(path: "/api/dns/reload", method: "POST", body: Optional<[String: String]>.none)
+    }
+
     func fetchSettings() async throws -> [String: String] {
         try await request(path: "/api/settings", method: "GET", body: Optional<[String: String]>.none)
     }
@@ -105,10 +129,13 @@ struct DaemonAPIClient: APIClient {
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                throw APIClientError.invalidResponse(statusCode: -1)
+                throw APIClientError.invalidResponse(statusCode: -1, message: nil)
             }
             guard (200...299).contains(http.statusCode) else {
-                throw APIClientError.invalidResponse(statusCode: http.statusCode)
+                throw APIClientError.invalidResponse(
+                    statusCode: http.statusCode,
+                    message: DaemonAPIClient.decodeErrorMessage(from: data, using: decoder)
+                )
             }
             do {
                 return try decoder.decode(T.self, from: data)
@@ -120,6 +147,20 @@ struct DaemonAPIClient: APIClient {
         } catch {
             throw APIClientError.transport(error)
         }
+    }
+
+    private static func decodeErrorMessage(from data: Data, using decoder: JSONDecoder) -> String? {
+        if let action = try? decoder.decode(DNSActionResult.self, from: data), !action.message.isEmpty {
+            return action.message
+        }
+        if let action = try? decoder.decode(ProxyActionResult.self, from: data), !action.message.isEmpty {
+            return action.message
+        }
+        if let payload = try? decoder.decode([String: String].self, from: data) {
+            if let message = payload["message"], !message.isEmpty { return message }
+            if let error = payload["error"], !error.isEmpty { return error }
+        }
+        return nil
     }
 }
 
@@ -173,6 +214,28 @@ struct MockAPIClient: APIClient {
 
     func reloadProxyConfig() async throws -> ProxyActionResult {
         ProxyActionResult(status: "reloaded", message: "Mock reload accepted")
+    }
+
+    func fetchDNSStatus() async throws -> DNSStatus {
+        DNSStatus(name: "dns", status: "mock", message: "Mock DNS status")
+    }
+
+    func fetchDNSSettings() async throws -> DNSSettings {
+        DNSSettings(
+            listenAddress: "127.0.0.1:53",
+            upstreamMode: "doh",
+            provider: "cloudflare",
+            generatedConfigPath: "~/.macnet-gateway-dev/generated/dns",
+            configPreview: "listen-address=127.0.0.1\nport=53\nserver=1.1.1.1\ncache-size=1000\n"
+        )
+    }
+
+    func validateDNSConfig() async throws -> DNSActionResult {
+        DNSActionResult(status: "valid", message: "Mock DNS validation succeeded")
+    }
+
+    func reloadDNSConfig() async throws -> DNSActionResult {
+        DNSActionResult(status: "reloaded", message: "Mock DNS reload accepted")
     }
 
     func patchSettings(_ payload: [String: String]) async throws {

@@ -9,6 +9,8 @@ struct ContentView: View {
             DashboardView()
         case .liveActivity:
             LiveActivityView()
+        case .dns:
+            DNSView()
         case .proxy:
             ProxyView()
         case .services:

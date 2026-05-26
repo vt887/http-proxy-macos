@@ -14,6 +14,7 @@ import (
 	"github.com/vt887/macnet-gateway/daemon/internal/db"
 	"github.com/vt887/macnet-gateway/daemon/internal/events"
 	"github.com/vt887/macnet-gateway/daemon/internal/services"
+	"github.com/vt887/macnet-gateway/daemon/internal/services/dns"
 	"github.com/vt887/macnet-gateway/daemon/internal/services/squid"
 )
 
@@ -50,9 +51,13 @@ func main() {
 	if err := squidSvc.RenderConfig(context.Background()); err != nil {
 		log.Fatalf("failed to render squid config: %v", err)
 	}
+	dnsSvc := dns.NewMockService(cfg.DNSGeneratedConfigDir)
+	if err := dnsSvc.RenderConfig(context.Background()); err != nil {
+		log.Fatalf("failed to render dns config: %v", err)
+	}
 
 	eventBus := events.NewMockBus()
-	server := api.NewServer(store, eventBus, squidSvc)
+	server := api.NewServer(store, eventBus, squidSvc, dnsSvc)
 
 	httpServer := &http.Server{
 		Addr:    cfg.ListenAddress,

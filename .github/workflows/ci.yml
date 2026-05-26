@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feature/**
+
+jobs:
+  test:
+    name: Build and test
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: daemon/go.mod
+          cache: false
+
+      - name: Check Go formatting
+        run: |
+          set -euo pipefail
+          UNFORMATTED=$(find daemon helper -name '*.go' -print0 | xargs -0 gofmt -l)
+          if [ -n "${UNFORMATTED}" ]; then
+            echo "Unformatted Go files:"
+            echo "${UNFORMATTED}"
+            exit 1
+          fi
+
+      - name: Run test suite
+        run: make test

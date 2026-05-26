@@ -33,6 +33,14 @@ type ProxySettings struct {
 	ConfigPreview       string `json:"config_preview"`
 }
 
+type DNSSettings struct {
+	ListenAddress       string `json:"listen_address"`
+	UpstreamMode        string `json:"upstream_mode"`
+	Provider            string `json:"provider"`
+	GeneratedConfigPath string `json:"generated_config_path"`
+	ConfigPreview       string `json:"config_preview"`
+}
+
 type ActionResult struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
