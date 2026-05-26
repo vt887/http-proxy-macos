@@ -7,6 +7,8 @@ struct ContentView: View {
         switch selection {
         case .dashboard:
             DashboardView()
+        case .liveActivity:
+            LiveActivityView()
         case .services:
             ServicesView()
         case .settings:

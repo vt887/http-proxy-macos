@@ -32,3 +32,5 @@ Implemented in PR-2:
 - Swift app uses daemon HTTP client (`http://127.0.0.1:18080`) instead of mock-only wiring.
 - Dashboard and Services use explicit `LoadState` with retry.
 - Daemon persists service statuses in SQLite and serves `/api/services` from database records.
+- Settings UI reads/writes `ui.theme` through daemon settings API.
+- Live Activity UI reads events from `/api/live-activity`.
