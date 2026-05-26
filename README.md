@@ -48,6 +48,10 @@ curl -s http://127.0.0.1:18080/api/services
 curl -s http://127.0.0.1:18080/api/live-activity
 curl -s http://127.0.0.1:18080/api/settings
 curl -s -X PATCH http://127.0.0.1:18080/api/settings -d '{"ui.theme":"dark"}'
+curl -s http://127.0.0.1:18080/api/proxy/status
+curl -s http://127.0.0.1:18080/api/proxy/settings
+curl -s -X POST http://127.0.0.1:18080/api/proxy/validate
+curl -s -X POST http://127.0.0.1:18080/api/proxy/reload
 ```
 
 ## PR-2 progress
@@ -58,3 +62,9 @@ curl -s -X PATCH http://127.0.0.1:18080/api/settings -d '{"ui.theme":"dark"}'
 4. Settings screen now loads and saves `ui.theme` through daemon API.
 5. Live Activity page now renders daemon events from `/api/live-activity`.
 6. Swift models include a live-activity event contract for `/api/live-activity`.
+
+## PR-3 progress
+
+1. Added Squid mock manager skeleton with binary detection and generated config rendering.
+2. Added proxy daemon endpoints for status, settings (with generated config preview), validate, and reload actions.
+3. Added Proxy screen in SwiftUI with config preview and validate/reload actions.

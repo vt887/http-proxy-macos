@@ -12,6 +12,7 @@ import (
 	"github.com/vt887/macnet-gateway/daemon/internal/db"
 	"github.com/vt887/macnet-gateway/daemon/internal/events"
 	"github.com/vt887/macnet-gateway/daemon/internal/services"
+	"github.com/vt887/macnet-gateway/daemon/internal/services/squid"
 )
 
 func testServer(t *testing.T) *Server {
@@ -35,7 +36,11 @@ func testServer(t *testing.T) *Server {
 			t.Fatal(err)
 		}
 	}
-	return NewServer(store, events.NewMockBus())
+	squidSvc := squid.NewMockService(filepath.Join(t.TempDir(), "generated", "squid"))
+	if err := squidSvc.RenderConfig(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return NewServer(store, events.NewMockBus(), squidSvc)
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -90,5 +95,37 @@ func TestServicesEndpoint(t *testing.T) {
 	}
 	if len(payload) == 0 {
 		t.Fatal("expected seeded service statuses")
+	}
+}
+
+func TestProxyEndpoints(t *testing.T) {
+	server := testServer(t)
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/proxy/status", nil)
+	statusRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("unexpected status endpoint code: %d", statusRec.Code)
+	}
+
+	settingsReq := httptest.NewRequest(http.MethodGet, "/api/proxy/settings", nil)
+	settingsRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(settingsRec, settingsReq)
+	if settingsRec.Code != http.StatusOK {
+		t.Fatalf("unexpected settings endpoint code: %d", settingsRec.Code)
+	}
+
+	validateReq := httptest.NewRequest(http.MethodPost, "/api/proxy/validate", nil)
+	validateRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(validateRec, validateReq)
+	if validateRec.Code != http.StatusOK {
+		t.Fatalf("unexpected validate endpoint code: %d", validateRec.Code)
+	}
+
+	reloadReq := httptest.NewRequest(http.MethodPost, "/api/proxy/reload", nil)
+	reloadRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(reloadRec, reloadReq)
+	if reloadRec.Code != http.StatusOK {
+		t.Fatalf("unexpected reload endpoint code: %d", reloadRec.Code)
 	}
 }

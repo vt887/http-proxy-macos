@@ -13,8 +13,16 @@ type DNSEvent struct{}
 type HelperRequest struct{}
 type HelperResponse struct{}
 
+type ProxySettings struct {
+	ListenAddress       string `json:"listen_address"`
+	CacheDirectory      string `json:"cache_directory"`
+	GeneratedConfigPath string `json:"generated_config_path"`
+}
+
 type SquidService interface {
 	Status(ctx context.Context) (ServiceStatus, error)
+	Settings(ctx context.Context) (ProxySettings, error)
+	ConfigPreview(ctx context.Context) (string, error)
 	RenderConfig(ctx context.Context) error
 	ValidateConfig(ctx context.Context) error
 	Reload(ctx context.Context) error
