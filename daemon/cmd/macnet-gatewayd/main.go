@@ -32,8 +32,21 @@ func main() {
 		log.Fatalf("failed to initialize db: %v", err)
 	}
 
+	if err := db.UpsertSetting(context.Background(), store, "ui.theme", "system"); err != nil {
+		log.Fatalf("failed to seed settings: %v", err)
+	}
+	for _, status := range services.NewMockRegistry() {
+		if err := db.UpsertServiceStatus(context.Background(), store, db.ServiceStatusRecord{
+			Name:    status.Name,
+			Status:  status.Status,
+			Message: status.Message,
+		}); err != nil {
+			log.Fatalf("failed to seed service status: %v", err)
+		}
+	}
+
 	eventBus := events.NewMockBus()
-	server := api.NewServer(store, eventBus, services.NewMockRegistry())
+	server := api.NewServer(store, eventBus)
 
 	httpServer := &http.Server{
 		Addr:    cfg.ListenAddress,

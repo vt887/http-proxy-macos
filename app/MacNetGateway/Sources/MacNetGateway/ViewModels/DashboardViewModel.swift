@@ -3,20 +3,21 @@ import Foundation
 @MainActor
 final class DashboardViewModel: ObservableObject {
     @Published private(set) var metrics: DashboardMetrics?
-    @Published private(set) var errorMessage: String?
+    @Published private(set) var loadState: LoadState = .idle
 
     private let apiClient: APIClient
 
-    init(apiClient: APIClient = MockAPIClient()) {
+    init(apiClient: APIClient = DaemonAPIClient()) {
         self.apiClient = apiClient
     }
 
     func load() async {
+        loadState = .loading
         do {
             metrics = try await apiClient.fetchDashboard()
-            errorMessage = nil
+            loadState = .loaded
         } catch {
-            errorMessage = "Failed to load dashboard metrics."
+            loadState = .failed(error.localizedDescription)
         }
     }
 }
