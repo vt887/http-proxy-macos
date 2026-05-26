@@ -23,9 +23,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: daemon/go.mod
-          cache-dependency-path: |
-            daemon/go.sum
-            helper/go.sum
+          cache: false
 
       - name: Check Go formatting
         run: |
