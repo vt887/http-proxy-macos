@@ -39,6 +39,22 @@ cd app/MacNetGateway
 swift test
 ```
 
+### Run local CI checks
+
+```bash
+make ci
+```
+
+This runs Go format validation plus the full test suite (`make test`).
+
+### Run local security checks
+
+```bash
+make security
+```
+
+This runs Go vulnerability scanning (`govulncheck`) and secret scanning (`gitleaks`, if installed).
+
 ### Example API calls
 
 ```bash
@@ -68,3 +84,8 @@ curl -s -X POST http://127.0.0.1:18080/api/proxy/reload
 1. Added Squid mock manager skeleton with binary detection and generated config rendering.
 2. Added proxy daemon endpoints for status, settings (with generated config preview), validate, and reload actions.
 3. Added Proxy screen in SwiftUI with config preview and validate/reload actions.
+
+## CI and Security workflows
+
+- `.github/workflows/ci.yml`: PR/push CI for format checks and tests on macOS ARM64 self-hosted runner.
+- `.github/workflows/security.yml`: dependency review (PR), CodeQL (Go), gitleaks, and govulncheck scans.

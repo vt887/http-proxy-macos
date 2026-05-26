@@ -18,7 +18,7 @@ protocol APIClient {
 
 enum APIClientError: Error {
     case invalidURL
-    case invalidResponse(statusCode: Int)
+    case invalidResponse(statusCode: Int, message: String?)
     case decodeFailed
     case transport(Error)
 }
@@ -28,8 +28,12 @@ extension APIClientError: LocalizedError {
         switch self {
         case .invalidURL:
             "Invalid daemon API URL."
-        case .invalidResponse(let statusCode):
-            "Daemon API returned status \(statusCode)."
+        case .invalidResponse(let statusCode, let message):
+            if let message, !message.isEmpty {
+                "Daemon API returned status \(statusCode): \(message)"
+            } else {
+                "Daemon API returned status \(statusCode)."
+            }
         case .decodeFailed:
             "Failed to decode daemon response."
         case .transport(let error):
@@ -125,10 +129,13 @@ struct DaemonAPIClient: APIClient {
         do {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
-                throw APIClientError.invalidResponse(statusCode: -1)
+                throw APIClientError.invalidResponse(statusCode: -1, message: nil)
             }
             guard (200...299).contains(http.statusCode) else {
-                throw APIClientError.invalidResponse(statusCode: http.statusCode)
+                throw APIClientError.invalidResponse(
+                    statusCode: http.statusCode,
+                    message: DaemonAPIClient.decodeErrorMessage(from: data, using: decoder)
+                )
             }
             do {
                 return try decoder.decode(T.self, from: data)
@@ -140,6 +147,20 @@ struct DaemonAPIClient: APIClient {
         } catch {
             throw APIClientError.transport(error)
         }
+    }
+
+    private static func decodeErrorMessage(from data: Data, using decoder: JSONDecoder) -> String? {
+        if let action = try? decoder.decode(DNSActionResult.self, from: data), !action.message.isEmpty {
+            return action.message
+        }
+        if let action = try? decoder.decode(ProxyActionResult.self, from: data), !action.message.isEmpty {
+            return action.message
+        }
+        if let payload = try? decoder.decode([String: String].self, from: data) {
+            if let message = payload["message"], !message.isEmpty { return message }
+            if let error = payload["error"], !error.isEmpty { return error }
+        }
+        return nil
     }
 }
 

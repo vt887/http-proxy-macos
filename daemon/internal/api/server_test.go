@@ -19,6 +19,7 @@ import (
 
 type failingValidateSquidService struct{}
 type failingValidateDNSService struct{}
+type invalidValidateDNSService struct{ failingValidateDNSService }
 
 func (f failingValidateSquidService) Status(context.Context) (services.ServiceStatus, error) {
 	return services.ServiceStatus{Name: "squid", Status: "mock", Message: "test"}, nil
@@ -60,6 +61,10 @@ func (f failingValidateDNSService) TailQueryLog(context.Context) (<-chan service
 	ch := make(chan services.DNSEvent)
 	close(ch)
 	return ch, nil
+}
+
+func (f invalidValidateDNSService) ValidateConfig(context.Context) error {
+	return errors.Join(dns.ErrInvalidConfig, errors.New("missing listen-address"))
 }
 
 func testServer(t *testing.T) *Server {
@@ -293,5 +298,37 @@ func TestDNSValidateInternalErrorReturnsServerError(t *testing.T) {
 	server.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 for internal dns validate error, got %d", rec.Code)
+	}
+}
+
+func TestDNSValidateInvalidConfigReturnsBadRequest(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "app.sqlite")
+	store, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := db.Initialize(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+
+	squidSvc := squid.NewMockService(filepath.Join(t.TempDir(), "generated", "squid"))
+	if err := squidSvc.RenderConfig(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(store, events.NewMockBus(), squidSvc, invalidValidateDNSService{})
+	req := httptest.NewRequest(http.MethodPost, "/api/dns/validate", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid dns validate error, got %d", rec.Code)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["status"] != "invalid" {
+		t.Fatalf("expected invalid status payload, got %#v", payload)
 	}
 }
