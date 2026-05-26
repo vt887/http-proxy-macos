@@ -8,10 +8,6 @@ on:
       - main
       - feature/**
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
-  cancel-in-progress: true
-
 jobs:
   test:
     name: Build and test

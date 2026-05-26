@@ -15,10 +15,6 @@ env:
 permissions:
   contents: read
 
-concurrency:
-  group: security-${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
-  cancel-in-progress: true
-
 jobs:
   dependency-review:
     name: Dependency review
