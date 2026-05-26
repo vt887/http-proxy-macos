@@ -32,7 +32,7 @@ func main() {
 		log.Fatalf("failed to initialize db: %v", err)
 	}
 
-	if err := db.UpsertSetting(context.Background(), store, "ui.theme", "system"); err != nil {
+	if err := db.InsertSettingIfMissing(context.Background(), store, "ui.theme", "system"); err != nil {
 		log.Fatalf("failed to seed settings: %v", err)
 	}
 	for _, status := range services.NewMockRegistry() {

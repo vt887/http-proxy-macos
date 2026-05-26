@@ -66,6 +66,14 @@ func UpsertSetting(ctx context.Context, db *sql.DB, key, value string) error {
 	return err
 }
 
+func InsertSettingIfMissing(ctx context.Context, db *sql.DB, key, value string) error {
+	_, err := db.ExecContext(ctx, `
+		INSERT OR IGNORE INTO settings(key, value, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+	`, key, value)
+	return err
+}
+
 func GetSetting(ctx context.Context, db *sql.DB, key string) (string, error) {
 	var value string
 	err := db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key).Scan(&value)

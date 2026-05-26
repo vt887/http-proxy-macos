@@ -49,8 +49,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func (s *Server) handleServices(w http.ResponseWriter, _ *http.Request) {
-	serviceStatuses, err := db.ListServiceStatuses(context.Background(), s.db)
+func (s *Server) handleServices(w http.ResponseWriter, r *http.Request) {
+	serviceStatuses, err := db.ListServiceStatuses(r.Context(), s.db)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
