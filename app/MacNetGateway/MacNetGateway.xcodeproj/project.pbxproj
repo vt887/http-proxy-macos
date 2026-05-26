@@ -1,0 +1,2 @@
+// PR-1 scaffold placeholder.
+// Swift Package Manager layout in app/MacNetGateway is the build source of truth.

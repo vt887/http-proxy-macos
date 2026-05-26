@@ -1,0 +1,66 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/vt887/macnet-gateway/daemon/internal/db"
+	"github.com/vt887/macnet-gateway/daemon/internal/events"
+	"github.com/vt887/macnet-gateway/daemon/internal/services"
+)
+
+func testServer(t *testing.T) *Server {
+	t.Helper()
+	dbPath := filepath.Join(t.TempDir(), "app.sqlite")
+	store, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := db.Initialize(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+	return NewServer(store, events.NewMockBus(), services.NewMockRegistry())
+}
+
+func TestHealthEndpoint(t *testing.T) {
+	server := testServer(t)
+	req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d", rec.Code)
+	}
+}
+
+func TestPatchAndGetSettings(t *testing.T) {
+	server := testServer(t)
+	req := httptest.NewRequest(http.MethodPatch, "/api/settings", strings.NewReader(`{"ui.theme":"dark"}`))
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("unexpected patch status: %d", rec.Code)
+	}
+
+	getReq := httptest.NewRequest(http.MethodGet, "/api/settings", nil)
+	getRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(getRec, getReq)
+	if getRec.Code != http.StatusOK {
+		t.Fatalf("unexpected get status: %d", getRec.Code)
+	}
+
+	var payload map[string]string
+	if err := json.Unmarshal(getRec.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["ui.theme"] != "dark" {
+		t.Fatalf("expected dark theme, got %q", payload["ui.theme"])
+	}
+}
