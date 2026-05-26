@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -14,6 +15,29 @@ import (
 	"github.com/vt887/macnet-gateway/daemon/internal/services"
 	"github.com/vt887/macnet-gateway/daemon/internal/services/squid"
 )
+
+type failingValidateSquidService struct{}
+
+func (f failingValidateSquidService) Status(context.Context) (services.ServiceStatus, error) {
+	return services.ServiceStatus{Name: "squid", Status: "mock", Message: "test"}, nil
+}
+func (f failingValidateSquidService) Settings(context.Context) (services.ProxySettings, error) {
+	return services.ProxySettings{}, nil
+}
+func (f failingValidateSquidService) ConfigPreview(context.Context) (string, error) { return "", nil }
+func (f failingValidateSquidService) RenderConfig(context.Context) error            { return nil }
+func (f failingValidateSquidService) ValidateConfig(context.Context) error {
+	return errors.New("io failure")
+}
+func (f failingValidateSquidService) Reload(context.Context) error  { return nil }
+func (f failingValidateSquidService) Start(context.Context) error   { return nil }
+func (f failingValidateSquidService) Stop(context.Context) error    { return nil }
+func (f failingValidateSquidService) Restart(context.Context) error { return nil }
+func (f failingValidateSquidService) TailAccessLog(context.Context) (<-chan services.ProxyEvent, error) {
+	ch := make(chan services.ProxyEvent)
+	close(ch)
+	return ch, nil
+}
 
 func testServer(t *testing.T) *Server {
 	t.Helper()
@@ -125,7 +149,7 @@ func TestProxyEndpoints(t *testing.T) {
 	if err := json.Unmarshal(settingsRec.Body.Bytes(), &settingsPayload); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(settingsPayload["config_preview"], "http_port 3128") {
+	if !strings.Contains(settingsPayload["config_preview"], "http_port 127.0.0.1:3128") {
 		t.Fatalf("expected http_port in config preview, got %#v", settingsPayload)
 	}
 
@@ -155,5 +179,25 @@ func TestProxyEndpoints(t *testing.T) {
 	}
 	if reloadPayload["status"] != "reloaded" {
 		t.Fatalf("expected reloaded status, got %#v", reloadPayload)
+	}
+}
+
+func TestProxyValidateInternalErrorReturnsServerError(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "app.sqlite")
+	store, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := db.Initialize(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+
+	server := NewServer(store, events.NewMockBus(), failingValidateSquidService{})
+	req := httptest.NewRequest(http.MethodPost, "/api/proxy/validate", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for internal validate error, got %d", rec.Code)
 	}
 }

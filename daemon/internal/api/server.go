@@ -3,12 +3,14 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/vt887/macnet-gateway/daemon/internal/db"
 	"github.com/vt887/macnet-gateway/daemon/internal/events"
 	"github.com/vt887/macnet-gateway/daemon/internal/models"
 	"github.com/vt887/macnet-gateway/daemon/internal/services"
+	"github.com/vt887/macnet-gateway/daemon/internal/services/squid"
 )
 
 type Server struct {
@@ -126,7 +128,11 @@ func (s *Server) handleProxySettings(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleProxyValidate(w http.ResponseWriter, r *http.Request) {
 	if err := s.squidSvc.ValidateConfig(r.Context()); err != nil {
-		writeJSON(w, http.StatusBadRequest, models.ActionResult{Status: "invalid", Message: err.Error()})
+		if errors.Is(err, squid.ErrInvalidConfig) {
+			writeJSON(w, http.StatusBadRequest, models.ActionResult{Status: "invalid", Message: err.Error()})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, models.ActionResult{Status: "valid", Message: "Squid config is valid"})

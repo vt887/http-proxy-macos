@@ -160,10 +160,10 @@ struct MockAPIClient: APIClient {
 
     func fetchProxySettings() async throws -> ProxySettings {
         ProxySettings(
-            listenAddress: "0.0.0.0:3128",
+            listenAddress: "127.0.0.1:3128",
             cacheDirectory: "/Library/Caches/MacNetGateway/squid",
             generatedConfigPath: "~/.macnet-gateway-dev/generated/squid",
-            configPreview: "http_port 3128\ncache_dir ufs /Library/Caches/MacNetGateway/squid 4096 16 256\n"
+            configPreview: "http_port 127.0.0.1:3128\ncache_dir ufs /Library/Caches/MacNetGateway/squid 4096 16 256\n"
         )
     }
 
