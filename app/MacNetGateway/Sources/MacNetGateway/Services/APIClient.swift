@@ -8,6 +8,10 @@ protocol APIClient {
     @MainActor func fetchProxySettings() async throws -> ProxySettings
     @MainActor func validateProxyConfig() async throws -> ProxyActionResult
     @MainActor func reloadProxyConfig() async throws -> ProxyActionResult
+    @MainActor func fetchDNSStatus() async throws -> DNSStatus
+    @MainActor func fetchDNSSettings() async throws -> DNSSettings
+    @MainActor func validateDNSConfig() async throws -> DNSActionResult
+    @MainActor func reloadDNSConfig() async throws -> DNSActionResult
     @MainActor func fetchSettings() async throws -> [String: String]
     @MainActor func patchSettings(_ payload: [String: String]) async throws
 }
@@ -75,6 +79,22 @@ struct DaemonAPIClient: APIClient {
 
     func reloadProxyConfig() async throws -> ProxyActionResult {
         try await request(path: "/api/proxy/reload", method: "POST", body: Optional<[String: String]>.none)
+    }
+
+    func fetchDNSStatus() async throws -> DNSStatus {
+        try await request(path: "/api/dns/status", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func fetchDNSSettings() async throws -> DNSSettings {
+        try await request(path: "/api/dns/settings", method: "GET", body: Optional<[String: String]>.none)
+    }
+
+    func validateDNSConfig() async throws -> DNSActionResult {
+        try await request(path: "/api/dns/validate", method: "POST", body: Optional<[String: String]>.none)
+    }
+
+    func reloadDNSConfig() async throws -> DNSActionResult {
+        try await request(path: "/api/dns/reload", method: "POST", body: Optional<[String: String]>.none)
     }
 
     func fetchSettings() async throws -> [String: String] {
@@ -173,6 +193,28 @@ struct MockAPIClient: APIClient {
 
     func reloadProxyConfig() async throws -> ProxyActionResult {
         ProxyActionResult(status: "reloaded", message: "Mock reload accepted")
+    }
+
+    func fetchDNSStatus() async throws -> DNSStatus {
+        DNSStatus(name: "dns", status: "mock", message: "Mock DNS status")
+    }
+
+    func fetchDNSSettings() async throws -> DNSSettings {
+        DNSSettings(
+            listenAddress: "127.0.0.1:53",
+            upstreamMode: "doh",
+            provider: "cloudflare",
+            generatedConfigPath: "~/.macnet-gateway-dev/generated/dns",
+            configPreview: "listen-address=127.0.0.1\nport=53\nserver=1.1.1.1\ncache-size=1000\n"
+        )
+    }
+
+    func validateDNSConfig() async throws -> DNSActionResult {
+        DNSActionResult(status: "valid", message: "Mock DNS validation succeeded")
+    }
+
+    func reloadDNSConfig() async throws -> DNSActionResult {
+        DNSActionResult(status: "reloaded", message: "Mock DNS reload accepted")
     }
 
     func patchSettings(_ payload: [String: String]) async throws {

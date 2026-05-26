@@ -13,10 +13,12 @@ import (
 	"github.com/vt887/macnet-gateway/daemon/internal/db"
 	"github.com/vt887/macnet-gateway/daemon/internal/events"
 	"github.com/vt887/macnet-gateway/daemon/internal/services"
+	"github.com/vt887/macnet-gateway/daemon/internal/services/dns"
 	"github.com/vt887/macnet-gateway/daemon/internal/services/squid"
 )
 
 type failingValidateSquidService struct{}
+type failingValidateDNSService struct{}
 
 func (f failingValidateSquidService) Status(context.Context) (services.ServiceStatus, error) {
 	return services.ServiceStatus{Name: "squid", Status: "mock", Message: "test"}, nil
@@ -35,6 +37,27 @@ func (f failingValidateSquidService) Stop(context.Context) error    { return nil
 func (f failingValidateSquidService) Restart(context.Context) error { return nil }
 func (f failingValidateSquidService) TailAccessLog(context.Context) (<-chan services.ProxyEvent, error) {
 	ch := make(chan services.ProxyEvent)
+	close(ch)
+	return ch, nil
+}
+
+func (f failingValidateDNSService) Status(context.Context) (services.ServiceStatus, error) {
+	return services.ServiceStatus{Name: "dns", Status: "mock", Message: "test"}, nil
+}
+func (f failingValidateDNSService) Settings(context.Context) (services.DNSSettings, error) {
+	return services.DNSSettings{}, nil
+}
+func (f failingValidateDNSService) ConfigPreview(context.Context) (string, error) { return "", nil }
+func (f failingValidateDNSService) RenderConfig(context.Context) error            { return nil }
+func (f failingValidateDNSService) ValidateConfig(context.Context) error {
+	return errors.New("io failure")
+}
+func (f failingValidateDNSService) Reload(context.Context) error  { return nil }
+func (f failingValidateDNSService) Start(context.Context) error   { return nil }
+func (f failingValidateDNSService) Stop(context.Context) error    { return nil }
+func (f failingValidateDNSService) Restart(context.Context) error { return nil }
+func (f failingValidateDNSService) TailQueryLog(context.Context) (<-chan services.DNSEvent, error) {
+	ch := make(chan services.DNSEvent)
 	close(ch)
 	return ch, nil
 }
@@ -64,7 +87,11 @@ func testServer(t *testing.T) *Server {
 	if err := squidSvc.RenderConfig(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	return NewServer(store, events.NewMockBus(), squidSvc)
+	dnsSvc := dns.NewMockService(filepath.Join(t.TempDir(), "generated", "dns"))
+	if err := dnsSvc.RenderConfig(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	return NewServer(store, events.NewMockBus(), squidSvc, dnsSvc)
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -193,11 +220,78 @@ func TestProxyValidateInternalErrorReturnsServerError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	server := NewServer(store, events.NewMockBus(), failingValidateSquidService{})
+	dnsSvc := dns.NewMockService(filepath.Join(t.TempDir(), "generated", "dns"))
+	if err := dnsSvc.RenderConfig(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(store, events.NewMockBus(), failingValidateSquidService{}, dnsSvc)
 	req := httptest.NewRequest(http.MethodPost, "/api/proxy/validate", nil)
 	rec := httptest.NewRecorder()
 	server.Routes().ServeHTTP(rec, req)
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500 for internal validate error, got %d", rec.Code)
+	}
+}
+
+func TestDNSEndpoints(t *testing.T) {
+	server := testServer(t)
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/dns/status", nil)
+	statusRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("unexpected dns status endpoint code: %d", statusRec.Code)
+	}
+
+	settingsReq := httptest.NewRequest(http.MethodGet, "/api/dns/settings", nil)
+	settingsRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(settingsRec, settingsReq)
+	if settingsRec.Code != http.StatusOK {
+		t.Fatalf("unexpected dns settings endpoint code: %d", settingsRec.Code)
+	}
+	var settingsPayload map[string]string
+	if err := json.Unmarshal(settingsRec.Body.Bytes(), &settingsPayload); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(settingsPayload["config_preview"], "listen-address=127.0.0.1") {
+		t.Fatalf("expected dns preview to contain listen-address, got %#v", settingsPayload)
+	}
+
+	validateReq := httptest.NewRequest(http.MethodPost, "/api/dns/validate", nil)
+	validateRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(validateRec, validateReq)
+	if validateRec.Code != http.StatusOK {
+		t.Fatalf("unexpected dns validate endpoint code: %d", validateRec.Code)
+	}
+
+	reloadReq := httptest.NewRequest(http.MethodPost, "/api/dns/reload", nil)
+	reloadRec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(reloadRec, reloadReq)
+	if reloadRec.Code != http.StatusOK {
+		t.Fatalf("unexpected dns reload endpoint code: %d", reloadRec.Code)
+	}
+}
+
+func TestDNSValidateInternalErrorReturnsServerError(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "app.sqlite")
+	store, err := db.Open(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	if err := db.Initialize(context.Background(), store); err != nil {
+		t.Fatal(err)
+	}
+
+	squidSvc := squid.NewMockService(filepath.Join(t.TempDir(), "generated", "squid"))
+	if err := squidSvc.RenderConfig(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	server := NewServer(store, events.NewMockBus(), squidSvc, failingValidateDNSService{})
+	req := httptest.NewRequest(http.MethodPost, "/api/dns/validate", nil)
+	rec := httptest.NewRecorder()
+	server.Routes().ServeHTTP(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for internal dns validate error, got %d", rec.Code)
 	}
 }

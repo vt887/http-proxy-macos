@@ -10,6 +10,7 @@ import (
 	"github.com/vt887/macnet-gateway/daemon/internal/events"
 	"github.com/vt887/macnet-gateway/daemon/internal/models"
 	"github.com/vt887/macnet-gateway/daemon/internal/services"
+	"github.com/vt887/macnet-gateway/daemon/internal/services/dns"
 	"github.com/vt887/macnet-gateway/daemon/internal/services/squid"
 )
 
@@ -17,13 +18,15 @@ type Server struct {
 	db       *sql.DB
 	eventBus events.Bus
 	squidSvc services.SquidService
+	dnsSvc   services.DNSService
 }
 
-func NewServer(dbConn *sql.DB, eventBus events.Bus, squidSvc services.SquidService) *Server {
+func NewServer(dbConn *sql.DB, eventBus events.Bus, squidSvc services.SquidService, dnsSvc services.DNSService) *Server {
 	return &Server{
 		db:       dbConn,
 		eventBus: eventBus,
 		squidSvc: squidSvc,
+		dnsSvc:   dnsSvc,
 	}
 }
 
@@ -39,6 +42,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/proxy/settings", s.handleProxySettings)
 	mux.HandleFunc("POST /api/proxy/validate", s.handleProxyValidate)
 	mux.HandleFunc("POST /api/proxy/reload", s.handleProxyReload)
+	mux.HandleFunc("GET /api/dns/status", s.handleDNSStatus)
+	mux.HandleFunc("GET /api/dns/settings", s.handleDNSSettings)
+	mux.HandleFunc("POST /api/dns/reload", s.handleDNSReload)
+	mux.HandleFunc("POST /api/dns/validate", s.handleDNSValidate)
 	return mux
 }
 
@@ -144,6 +151,55 @@ func (s *Server) handleProxyReload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, models.ActionResult{Status: "reloaded", Message: "Squid reload request accepted"})
+}
+
+func (s *Server) handleDNSStatus(w http.ResponseWriter, r *http.Request) {
+	status, err := s.dnsSvc.Status(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (s *Server) handleDNSSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := s.dnsSvc.Settings(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	preview, err := s.dnsSvc.ConfigPreview(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, models.DNSSettings{
+		ListenAddress:       settings.ListenAddress,
+		UpstreamMode:        settings.UpstreamMode,
+		Provider:            settings.Provider,
+		GeneratedConfigPath: settings.GeneratedConfigPath,
+		ConfigPreview:       preview,
+	})
+}
+
+func (s *Server) handleDNSValidate(w http.ResponseWriter, r *http.Request) {
+	if err := s.dnsSvc.ValidateConfig(r.Context()); err != nil {
+		if errors.Is(err, dns.ErrInvalidConfig) {
+			writeJSON(w, http.StatusBadRequest, models.ActionResult{Status: "invalid", Message: err.Error()})
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, models.ActionResult{Status: "valid", Message: "DNS config is valid"})
+}
+
+func (s *Server) handleDNSReload(w http.ResponseWriter, r *http.Request) {
+	if err := s.dnsSvc.Reload(r.Context()); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, models.ActionResult{Status: "reloaded", Message: "DNS reload request accepted"})
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

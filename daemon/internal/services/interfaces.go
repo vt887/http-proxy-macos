@@ -19,6 +19,13 @@ type ProxySettings struct {
 	GeneratedConfigPath string `json:"generated_config_path"`
 }
 
+type DNSSettings struct {
+	ListenAddress       string `json:"listen_address"`
+	UpstreamMode        string `json:"upstream_mode"`
+	Provider            string `json:"provider"`
+	GeneratedConfigPath string `json:"generated_config_path"`
+}
+
 type SquidService interface {
 	Status(ctx context.Context) (ServiceStatus, error)
 	Settings(ctx context.Context) (ProxySettings, error)
@@ -34,6 +41,8 @@ type SquidService interface {
 
 type DNSService interface {
 	Status(ctx context.Context) (ServiceStatus, error)
+	Settings(ctx context.Context) (DNSSettings, error)
+	ConfigPreview(ctx context.Context) (string, error)
 	RenderConfig(ctx context.Context) error
 	ValidateConfig(ctx context.Context) error
 	Reload(ctx context.Context) error
